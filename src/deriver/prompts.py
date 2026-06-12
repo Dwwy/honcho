@@ -36,6 +36,21 @@ def _custom_instructions_section(custom_instructions: str | None) -> str:
     )
 
 
+def _json_schema_section() -> str:
+    """Return the JSON output format instruction for the deriver prompt.
+
+    Separated to avoid f-string brace-escaping complications with the JSON.
+    """
+    return (
+        "OUTPUT FORMAT: Return ONLY a valid JSON object. No prose, no explanation.\n"
+        'JSON schema: {"explicit": [{"content": "<observation about {peer_id}>", "salience": <1-10 integer}]}\n'
+        '- "content": the extracted fact as a sentence about {peer_id}\n'
+        '- "salience": importance of this fact (1=trivial, 10=critical)\n'
+        'Example: {"explicit": [{"content": "About {peer_id}: is 25 years old", "salience": 7}, '
+        '{"content": "About {peer_id}: birthday is June 21st", "salience": 5}]}'
+    )
+
+
 def minimal_deriver_prompt(
     peer_id: str,
     messages: str,
@@ -52,8 +67,16 @@ def minimal_deriver_prompt(
         Formatted prompt string for observation extraction.
     """
     custom_instructions_section = _custom_instructions_section(custom_instructions)
-    return c(
-        f"""
+    json_schema = _json_schema_section()
+
+    # Build examples inline using a helper to avoid f-string brace hell
+    examples = "\n".join([
+        f'- EXPLICIT: "I just had my 25th birthday last Saturday" \u2192 "About {peer_id}: age is 25", "About {peer_id}: birthday is June 21st"',
+        f'- EXPLICIT: "I took my dog for a walk in NYC" \u2192 "About {peer_id}: has a dog", "About {peer_id}: lives in or near NYC"',
+        f'- EXPLICIT: "{peer_id} attended college" + general knowledge \u2192 "About {peer_id}: completed high school or equivalent"',
+    ])
+
+    return c(f"""
 Analyze messages from {peer_id} to extract **explicit atomic facts** about them.
 
 [EXPLICIT] DEFINITION: Facts about {peer_id} that can be derived directly from their messages.
@@ -68,9 +91,9 @@ RULES:
 - Contextualize each observation sufficiently (e.g. "Ann is nervous about the job interview at the pharmacy" not just "Ann is nervous")
 
 EXAMPLES:
-- EXPLICIT: "I just had my 25th birthday last Saturday" → "{peer_id} is 25 years old", "{peer_id}'s birthday is June 21st"
-- EXPLICIT: "I took my dog for a walk in NYC" → "{peer_id} has a dog", "{peer_id} lives in NYC"
-- EXPLICIT: "{peer_id} attended college" + general knowledge → "{peer_id} completed high school or equivalent"
+{examples}
+
+{json_schema}
 
 {custom_instructions_section}
 
@@ -78,8 +101,7 @@ Messages to analyze:
 <messages>
 {messages}
 </messages>
-"""
-    )
+""")
 
 
 @cache

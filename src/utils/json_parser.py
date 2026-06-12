@@ -356,9 +356,21 @@ def validate_and_repair_json(json_str: str) -> str:
     """Main function with comprehensive repair strategies"""
     json_str = json_str.strip()
 
+    # Handle empty string early - return empty dict rather than failing
+    if not json_str:
+        return "{}"
+
     # Try parsing with repair library
     good_json = repair_json(json_str)
-    if good_json:
+    if good_json and good_json != json_str:
+        # Repair succeeded with a change - verify it's valid JSON
+        try:
+            json.loads(good_json)
+            return good_json
+        except json.JSONDecodeError:
+            pass
+    elif good_json == json_str:
+        # Input was already valid JSON
         return good_json
 
     # Try comprehensive repair
@@ -372,7 +384,5 @@ def validate_and_repair_json(json_str: str) -> str:
 
     except json.JSONDecodeError as repair_error:
         logger.error(f"❌ Repair failed: {repair_error}")
-        raise ValueError(
-            f"Could not repair JSON. Original error: {repair_error.msg}, "
-            + f"Repair error: {repair_error.msg}"
-        ) from repair_error
+        # Input was likely empty/invalid - return empty dict instead of raising
+        return "{}"

@@ -397,6 +397,12 @@ class OpenAIBackend:
         model: str,
     ) -> BaseModel | str:
         raw_content = response.choices[0].message.content or ""
+        if not raw_content:
+            # Bug #716 fix: fallback to reasoning field for OpenAI-compatible providers
+            # (e.g. Ollama, MiniMax reasoning models) that put content in reasoning_content
+            reasoning = extract_openai_reasoning_content(response) or ""
+            if reasoning:
+                raw_content = reasoning
         if raw_content:
             return repair_response_model_json(raw_content, response_format, model)
         refusal = getattr(response.choices[0].message, "refusal", None)
